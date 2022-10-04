@@ -1,5 +1,7 @@
 package com.github.blemale.mentoring.concurrency.thread;
 
+import static com.github.blemale.mentoring.concurrency.thread.ThreadUtils.safeInterruptible;
+
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadLocalRandom;
@@ -62,5 +64,22 @@ class Samples {
     executor.shutdownNow();
     var successful = executor.awaitTermination(1, TimeUnit.SECONDS);
     System.out.printf("Termination is %s%n", successful ? "successful" : "unsuccessful");
+  }
+
+  @Test
+  void how_many_thread() {
+    var index = new AtomicInteger();
+    while (true) {
+      var thread =
+          new Thread(
+              () -> {
+                System.out.printf("Starting thread nb %s%n", index.incrementAndGet());
+                while (!Thread.currentThread().isInterrupted()) {
+                  safeInterruptible(() -> Thread.sleep(1_000));
+                }
+              });
+      thread.setDaemon(true);
+      thread.start();
+    }
   }
 }
