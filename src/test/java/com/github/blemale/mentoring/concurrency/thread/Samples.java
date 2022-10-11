@@ -2,11 +2,14 @@ package com.github.blemale.mentoring.concurrency.thread;
 
 import static com.github.blemale.mentoring.concurrency.thread.ThreadUtils.safeInterruptible;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 
 class Samples {
@@ -69,7 +72,7 @@ class Samples {
   @Test
   void how_many_thread() {
     var index = new AtomicInteger();
-    while (true) {
+    while (!Thread.interrupted()) {
       var thread =
           new Thread(
               () -> {
@@ -80,6 +83,61 @@ class Samples {
               });
       thread.setDaemon(true);
       thread.start();
+    }
+  }
+
+  @Test
+  void unprotected_shared_state() throws InterruptedException {
+    final class Counter {
+      int value = 0;
+
+      void increment() {
+        value = value + 1;
+      }
+    }
+
+    var counter = new Counter();
+
+    Runnable increment = () -> IntStream.range(0, 1_000).forEach(__ -> counter.increment());
+
+    var thread1 = new Thread(increment);
+    var thread2 = new Thread(increment);
+
+    thread1.start();
+    thread2.start();
+
+    thread1.join();
+    thread2.join();
+
+    System.out.printf("Counter value should be 2000 and is %s%n", counter.value);
+  }
+
+  @Test
+  void synchronized_api() {
+    final class SynchronizedState {
+      private static final List<String> STATE = new ArrayList<>();
+
+      static synchronized void addStatic(String value) {
+        STATE.add(value);
+      }
+
+      static List<String> getStatic() {
+        synchronized (SynchronizedState.class) {
+          return List.copyOf(STATE);
+        }
+      }
+
+      private final List<String> state = new ArrayList<>();
+
+      synchronized void add(String value) {
+        state.add(value);
+      }
+
+      List<String> get() {
+        synchronized (this) {
+          return List.copyOf(state);
+        }
+      }
     }
   }
 }

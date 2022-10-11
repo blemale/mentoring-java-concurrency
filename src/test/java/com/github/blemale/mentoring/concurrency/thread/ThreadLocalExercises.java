@@ -6,7 +6,7 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 
-public class ThreadLocalExercises {
+class ThreadLocalExercises {
 
   @Test
   void ex_1_propagate_a_transaction_id_using_thread_local() {
