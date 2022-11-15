@@ -9,6 +9,10 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 
@@ -89,6 +93,7 @@ class Samples {
   @Test
   void unprotected_shared_state() throws InterruptedException {
     final class Counter {
+
       int value = 0;
 
       void increment() {
@@ -115,6 +120,7 @@ class Samples {
   @Test
   void synchronized_api() {
     final class SynchronizedState {
+
       private static final List<String> STATE = new ArrayList<>();
 
       static synchronized void addStatic(String value) {
@@ -136,6 +142,68 @@ class Samples {
       List<String> get() {
         synchronized (this) {
           return List.copyOf(state);
+        }
+      }
+    }
+  }
+
+  @Test
+  void lock_api() {
+
+    final class LockedState {
+
+      private final Lock lock = new ReentrantLock(false /* fairness */);
+      private final List<String> state = new ArrayList<>();
+
+      void add(String value) {
+        lock.lock();
+        try {
+          state.add(value);
+        } finally {
+          lock.unlock();
+        }
+      }
+
+      List<String> tryGet() {
+        if (lock.tryLock()) {
+          try {
+            return List.copyOf(state);
+          } finally {
+            lock.unlock();
+          }
+        } else {
+          return null;
+        }
+      }
+    }
+  }
+
+  @Test
+  void read_write_lock_api() {
+
+    final class LockedState {
+
+      private final ReadWriteLock lock = new ReentrantReadWriteLock(false /* fairness */);
+      private final List<String> state = new ArrayList<>();
+
+      void add(String value) {
+        lock.writeLock().lock();
+        try {
+          state.add(value);
+        } finally {
+          lock.writeLock().unlock();
+        }
+      }
+
+      List<String> tryGet() {
+        if (lock.readLock().tryLock()) {
+          try {
+            return List.copyOf(state);
+          } finally {
+            lock.readLock().unlock();
+          }
+        } else {
+          return null;
         }
       }
     }
