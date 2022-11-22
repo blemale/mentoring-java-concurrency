@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -206,6 +207,33 @@ class Samples {
           return null;
         }
       }
+    }
+  }
+
+  @Test
+  void semaphore_api() throws InterruptedException {
+    var semaphore = new Semaphore(42, true /* fairness*/);
+
+    semaphore.acquire();
+    try {
+      System.out.println("Accessing a costly resource...");
+    } finally {
+      semaphore.release();
+    }
+
+    if (semaphore.tryAcquire()) {
+      try {
+        System.out.println("Accessing a costly resource in a non blocking way...");
+      } finally {
+        semaphore.release();
+      }
+    }
+
+    semaphore.acquire(3);
+    try {
+      System.out.println("Accessing a costly resource requiring 3 permits...");
+    } finally {
+      semaphore.release(3);
     }
   }
 }
