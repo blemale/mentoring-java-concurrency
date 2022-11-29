@@ -4,6 +4,9 @@ import static com.github.blemale.mentoring.concurrency.thread.ThreadUtils.safeIn
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
@@ -235,5 +238,60 @@ class Samples {
     } finally {
       semaphore.release(3);
     }
+  }
+
+  @Test
+  void concurrent_map_api() {
+    var map = new ConcurrentHashMap<String, Integer>();
+
+    map.put("foo", 1);
+    System.out.println(map.get("foo"));
+    System.out.println(map.getOrDefault("bar", 0));
+
+    // ConcurrentHashMap Javadoc:
+    // The entire method invocation is performed atomically.
+    // The supplied function is invoked exactly once per invocation of this method.
+    //
+    // ConcurrentMap Javadoc:
+    // When multiple threads attempt updates,
+    // map operations and the remapping function may be called multiple times.
+    map.compute("foo", (key, current) -> key.hashCode() + (current == null ? 0 : current));
+    map.computeIfAbsent("bar", String::hashCode);
+    map.computeIfPresent("foo", (key, current) -> key.hashCode() + current);
+    map.merge("foo", 42, Integer::sum);
+  }
+
+  @Test
+  void queue_api() {
+    var queue = new ConcurrentLinkedQueue<String>();
+
+    // Non-blocking, throws exception if full
+    queue.add("foo");
+    // Non-blocking, returns false if full
+    queue.offer("bar");
+
+    // Non-blocking, return null if no element available
+    System.out.println(queue.poll());
+  }
+
+  @Test
+  void blocking_queue_api() throws InterruptedException {
+    var blockingQueue = new ArrayBlockingQueue<String>(10);
+
+    // Non-blocking, throws exception if full
+    blockingQueue.add("foo");
+    // Non-blocking, returns false if full
+    blockingQueue.offer("bar");
+    // Blocking with timeout, returns false if it cannot offer before timeout
+    blockingQueue.offer("baz", 1, TimeUnit.SECONDS);
+    // Blocking
+    blockingQueue.put("qux");
+
+    // Non-blocking
+    System.out.println(blockingQueue.poll());
+    // Blocking with timeout
+    System.out.println(blockingQueue.poll(1, TimeUnit.SECONDS));
+    // Blocking
+    System.out.println(blockingQueue.take());
   }
 }
