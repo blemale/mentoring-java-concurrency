@@ -2,9 +2,11 @@ package com.github.blemale.mentoring.concurrency.thread;
 
 import static com.github.blemale.mentoring.concurrency.thread.ThreadUtils.safeInterruptible;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
@@ -18,7 +20,10 @@ import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.stream.IntStream;
+import jdk.incubator.concurrent.StructuredTaskScope;
 import org.junit.jupiter.api.Test;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 class Samples {
 
@@ -293,5 +298,99 @@ class Samples {
     System.out.println(blockingQueue.poll(1, TimeUnit.SECONDS));
     // Blocking
     System.out.println(blockingQueue.take());
+  }
+
+  @Test
+  void safe_publication_pattern() throws InterruptedException {
+    final class Publication {
+      String state;
+      long anotherState;
+      volatile boolean published;
+    }
+
+    var publication = new Publication();
+
+    var reader =
+        new Thread(
+            () -> {
+              while (!publication.published) {
+                Thread.yield();
+              }
+              System.out.printf(
+                  "Read publication: %s / %s%n", publication.state, publication.anotherState);
+            });
+    reader.start();
+
+    var writer =
+        new Thread(
+            () -> {
+              publication.state = "foo";
+              publication.anotherState = 42;
+              publication.published = true;
+            });
+    writer.start();
+
+    reader.join();
+    writer.join();
+  }
+
+  @Test
+  void mono_api() {
+    Mono.just("hello")
+        .delayElement(Duration.ofSeconds(1))
+        .map(string -> string.repeat(2))
+        .log()
+        .block();
+  }
+
+  @Test
+  void flux_api() {
+    Flux.just("hello")
+        .repeat()
+        .delayElements(Duration.ofMillis(1))
+        .sample(Duration.ofSeconds(1))
+        .take(10)
+        .log()
+        .blockLast();
+  }
+
+  @Test
+  void how_many_virtual_thread_thread() {
+    var index = new AtomicInteger();
+    while (!Thread.interrupted()) {
+      Thread.startVirtualThread(
+          () -> {
+            var _index = index.incrementAndGet();
+            if (_index % 100 == 0) {
+              System.out.printf("Starting thread nb %s%n", index.incrementAndGet());
+            }
+            while (!Thread.currentThread().isInterrupted()) {
+              safeInterruptible(() -> Thread.sleep(1_000));
+            }
+          });
+    }
+  }
+
+  @Test
+  void structured_concurrency() throws InterruptedException, ExecutionException {
+    Callable<Integer> flakyCall =
+        () -> {
+          var random = ThreadLocalRandom.current();
+          Thread.sleep(random.nextInt(1_000));
+          if (random.nextBoolean()) {
+            throw new RuntimeException();
+          }
+          return random.nextInt();
+        };
+
+    try (var scope = new StructuredTaskScope.ShutdownOnFailure()) {
+      var value = scope.fork(flakyCall);
+      var anotherValue = scope.fork(flakyCall);
+
+      scope.join();
+      scope.throwIfFailed();
+
+      System.out.printf("Result is %s%n", value.resultNow() + anotherValue.resultNow());
+    }
   }
 }
