@@ -18,7 +18,7 @@ import org.junit.jupiter.api.Test;
 
 class AkkaExercises {
 
-  record Release(String name, List<CompletableFutureExercises.Pod> pods) {}
+  record Release(String name, List<Pod> pods) {}
 
   record Pod(String name) {}
 
@@ -46,9 +46,7 @@ class AkkaExercises {
             } else {
               var pods =
                   IntStream.range(0, random.nextInt(10, 20))
-                      .mapToObj(
-                          index ->
-                              new CompletableFutureExercises.Pod("%s-%s".formatted(name, index)))
+                      .mapToObj(index -> new Pod("%s-%s".formatted(name, index)))
                       .toList();
               promise.complete(new Release(name, pods));
             }
@@ -104,7 +102,9 @@ class AkkaExercises {
     sealed interface Protocol {
       record GetPodDetails(String releaseName) implements Protocol {}
 
-      record PodDetails(List<Result<PodDetail, Throwable>> results) implements Protocol {}
+      record PodDetailsSuccess(List<Result<PodDetail, Throwable>> results) implements Protocol {}
+
+      record PodDetailsFailure(Throwable throwable) implements Protocol {}
     }
 
     @Override
@@ -116,15 +116,15 @@ class AkkaExercises {
   @Test
   void ex1_fetch_pod_details() {
     var system = ActorSystem.create();
-    var client = system.actorOf(Props.create(Client::new));
+    var client = system.actorOf(Props.create(Client.class, Client::new));
     var result =
-        Patterns.ask(client, new Client.Protocol.GetPodDetails("a-release"), Duration.ofMinutes(1))
+        Patterns.ask(client, new Client.Protocol.GetPodDetails("a-release"), Duration.ofSeconds(10))
             .toCompletableFuture()
             .join();
 
     assertThat(result)
         .isInstanceOfSatisfying(
-            Client.Protocol.PodDetails.class,
+            Client.Protocol.PodDetailsSuccess.class,
             details -> assertThat(details.results()).isNotEmpty());
   }
 }
